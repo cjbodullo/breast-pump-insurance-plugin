@@ -32,7 +32,12 @@
         timing: '',
         expanded: [],
         source: cfg.source || 'direct',
-        campaign: cfg.campaign || ''
+        campaign: cfg.campaign || '',
+        publicId: '',
+        journeyVersion: 0,
+        responseId: 0,
+        responseVersion: 0,
+        submitted: false
     };
 
     var state = clone(DEFAULT);
@@ -175,14 +180,17 @@
             ['no', 'No, I need to create an account.'],
             ['unsure', 'I\'m not sure / I need help accessing my account.']
         ], true);
-        if (state.account) {
-            html += '<p class="bbgc-sp12">' + esc(current.login) + '</p>';
+        if (state.account === 'yes') {
+            html += '<p class="bbgc-sp12">' + esc(current.existing_help || current.login) + '</p>';
         }
-        if (state.account === 'no' && current.register) {
-            html += '<div class="bbgc-help-links">' + ext('Registration help', current.register, 'bbgc-minor', 'registration_help_clicked') + '</div>';
+        if (state.account === 'no') {
+            html += '<p class="bbgc-sp12">' + esc(current.new_help || current.login) + '</p>';
+            if (current.register) {
+                html += '<div class="bbgc-help-links">' + ext('Registration help', current.register, 'bbgc-minor', 'registration_help_clicked') + '</div>';
+            }
         }
         if (state.account === 'unsure') {
-            html += '<p class="bbgc-sp12">On your insurer\'s sign-in page, use the account-recovery options. Do not create a second account if you already have one.</p>';
+            html += '<p class="bbgc-sp12">' + esc(current.recovery_help || 'On your insurer\'s sign-in page, use the account-recovery options. Do not create a second account if you already have one.') + '</p>';
         }
         return html;
     }
@@ -195,7 +203,11 @@
         html += '<div class="bbgc-guide-heading"><h1>' + (known ? 'Let\'s find your ' + esc(name) + ' coverage.' : 'Find the right insurance website.') + '</h1>';
         html += '<p class="bbgc-intro">' + (known
             ? 'Sign in on your insurer\'s website, then come back here to share what you find.'
-            : 'Look at your benefit card or ask your plan administrator for the official website. You can still continue if you cannot find it.') + '</p></div>';
+            : 'Look at your benefit card or ask your plan administrator for the official website. You can still continue if you cannot find it.') + '</p>';
+        if (current.audience) {
+            html += '<p class="bbgc-micro">' + esc(current.audience) + '</p>';
+        }
+        html += '</div>';
 
         if (known) {
             html += ext('Go to ' + esc(name) + ' Website', current.url, 'bbgc-btn bbgc-btn-dark bbgc-website', 'insurer_website_clicked');
@@ -210,6 +222,9 @@
                 return '<section class="bbgc-area"><span class="bbgc-num">' + (index + 1) + '</span><div><h3>' + esc(area[0]) + '</h3><p>' + esc(area[1]) + '</p></div></section>';
             }).join('') + '</div>';
             html += '<p class="bbgc-note">A general equipment or spending-account balance is not a breast pump allowance. Confirm that breast pumps qualify under your plan.</p>';
+            if (current.fallback && current.fallback !== current.url) {
+                html += '<div class="bbgc-minor-center">' + ext('Official member page', current.fallback, 'bbgc-minor', 'help_link_clicked') + '</div>';
+            }
             if (current.help) {
                 html += '<div class="bbgc-minor-center">' + ext('View ' + esc(name) + '\'s official guide', current.help, 'bbgc-minor', 'help_clicked') + '</div>';
             }
@@ -269,7 +284,7 @@
         html += details('feedback', 'Help us improve this guide', feedback());
         html += details('shopping', 'Your breast pump shopping plans', shopping());
         html += '<div class="bbgc-submit">' + btn('Finish & See My Summary', 'finish');
-        html += '<p class="bbgc-micro is-center bbgc-sp12">Your answers are self-reported, not verified by BabyBrands.</p></div>';
+        html += '<p class="bbgc-micro is-center bbgc-sp12">' + esc(cfg.notice || 'When you finish, BabyBrands will store your answers to improve this guide. Your answers are self-reported, not verified by BabyBrands.') + '</p></div>';
         html += '<button type="button" class="bbgc-back" data-action="backguide">' + icon('back') + 'Back to the guide</button></main>';
         return html;
     }
@@ -322,6 +337,238 @@
         });
     }
 
+    var csrf = '';
+    var syncQueue = Promise.resolve();
+
+    function uuid() {
+        if (window.crypto && crypto.randomUUID) {
+            return crypto.randomUUID();
+        }
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (char) {
+            var rand = Math.random() * 16 | 0;
+            return (char === 'x' ? rand : (rand & 0x3 | 0x8)).toString(16);
+        });
+    }
+
+    function idempotencyKey() {
+        var key = sessionStorage.getItem('bbgc_idem');
+        if (!key) {
+            key = uuid();
+            sessionStorage.setItem('bbgc_idem', key);
+        }
+        return key;
+    }
+
+    function api(method, path, body, keepalive) {
+        return fetch(cfg.restUrl + path, {
+            method: method,
+            credentials: 'same-origin',
+            keepalive: !!keepalive,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-BBGC-CSRF': csrf || ''
+            },
+            body: body ? JSON.stringify(body) : undefined
+        }).then(function (response) {
+            return response.json().catch(function () {
+                return {};
+            }).then(function (data) {
+                if (!response.ok) {
+                    var error = new Error((data && data.message) || 'We could not save your answers. Please try again.');
+                    error.status = response.status;
+                    throw error;
+                }
+                return data;
+            });
+        });
+    }
+
+    function rememberJourney(data) {
+        if (!data) {
+            return;
+        }
+        if (data.csrf) {
+            csrf = data.csrf;
+        }
+        if (data.publicId && state.publicId && data.publicId !== state.publicId) {
+            state.responseId = 0;
+            state.responseVersion = 0;
+            state.submitted = false;
+            sessionStorage.removeItem('bbgc_idem');
+        }
+        if (data.publicId) {
+            state.publicId = data.publicId;
+        }
+        if (data.rowVersion) {
+            state.journeyVersion = data.rowVersion;
+        }
+        save();
+    }
+
+    function applyServer(data) {
+        rememberJourney(data);
+        if (!data) {
+            return;
+        }
+        if (data.response) {
+            var response = data.response;
+            state.submitted = true;
+            state.responseId = response.id;
+            state.responseVersion = response.rowVersion;
+            state.coverage = response.coverage || '';
+            state.amount = response.amount || '';
+            state.noAmount = !!response.noAmount;
+            state.percent = response.percent || '';
+            state.amountMeaning = response.amountMeaning || '';
+            state.prescription = response.prescription || '';
+            state.category = response.category || '';
+            state.otherCategory = response.otherCategory || '';
+            state.ease = response.ease || '';
+            state.comment = response.comment || '';
+            state.brands = response.brands || [];
+            state.otherBrand = response.otherBrand || '';
+            state.retailer = response.retailer || '';
+            state.otherRetailer = response.otherRetailer || '';
+            state.timing = response.timing || '';
+            if (data.insurer) {
+                state.insurer = data.insurer;
+            }
+            state.otherInsurer = data.insurerOther || state.otherInsurer;
+            state.account = data.account || state.account;
+            if (!cfg.view) {
+                state.view = 'thanks';
+            }
+        } else if (data.insurer && !state.insurer) {
+            state.insurer = data.insurer;
+            state.otherInsurer = data.insurerOther || '';
+            state.account = data.account || '';
+        }
+        save();
+    }
+
+    var opening = null;
+
+    function ensureSession() {
+        if (csrf) {
+            return Promise.resolve();
+        }
+        if (opening) {
+            return opening;
+        }
+        var localInsurer = state.insurer;
+        var localAccount = state.account;
+        var localOther = state.otherInsurer;
+        opening = api('POST', '/journeys', {
+            source: state.source || cfg.source || 'direct',
+            campaign: state.campaign || cfg.campaign || ''
+        }).then(function (data) {
+            applyServer(data);
+            if (data && data.response) {
+                return;
+            }
+            if (localInsurer && (!data || data.insurer !== localInsurer || (localAccount && data.account !== localAccount))) {
+                state.insurer = localInsurer;
+                state.otherInsurer = localOther;
+                state.account = localAccount;
+                save();
+                return syncJourney();
+            }
+        }).finally(function () {
+            opening = null;
+        });
+        return opening;
+    }
+
+    function syncJourney() {
+        syncQueue = syncQueue.then(function () {
+            if (!csrf || !cfg.restUrl) {
+                return;
+            }
+            var step = state.view === 'page2' ? 2 : ((state.view === 'results' || state.view === 'thanks') ? 3 : 1);
+            return api('PATCH', '/journey', {
+                insurer: state.insurer,
+                insurerOther: state.otherInsurer,
+                account: state.account,
+                step: step,
+                rowVersion: state.journeyVersion
+            }).then(function (data) {
+                rememberJourney(data);
+            }).catch(function (error) {
+                if (error.status !== 409) {
+                    return;
+                }
+                return api('GET', '/journey').then(function (data) {
+                    rememberJourney(data);
+                    return api('PATCH', '/journey', {
+                        insurer: state.insurer,
+                        insurerOther: state.otherInsurer,
+                        account: state.account,
+                        step: step,
+                        rowVersion: state.journeyVersion
+                    });
+                }).then(function (data) {
+                    rememberJourney(data);
+                });
+            });
+        }).catch(function () {});
+        return syncQueue;
+    }
+
+    function track(type, step) {
+        var event = { type: type, step: step, uuid: uuid() };
+        ensureSession().then(function () {
+            if (!csrf) {
+                return;
+            }
+            api('POST', '/events', { events: [event] }, true).catch(function () {});
+        }).catch(function () {});
+    }
+
+    function responseBody() {
+        return {
+            coverage: state.coverage,
+            amount: state.noAmount ? '' : state.amount,
+            noAmount: !!state.noAmount,
+            percent: state.percent,
+            amountMeaning: state.amountMeaning,
+            prescription: state.prescription,
+            category: state.category,
+            otherCategory: state.otherCategory,
+            ease: state.ease,
+            comment: state.comment,
+            brands: state.brands,
+            otherBrand: state.otherBrand,
+            retailer: state.retailer,
+            otherRetailer: state.otherRetailer,
+            timing: state.timing,
+            noticeVersion: cfg.noticeVersion || ''
+        };
+    }
+
+    function submitResponse() {
+        return ensureSession().then(function () {
+            return syncJourney();
+        }).then(function () {
+            var body = responseBody();
+            if (state.responseId) {
+                body.responseVersion = state.responseVersion;
+                return api('PUT', '/response', body);
+            }
+            body.idempotencyKey = idempotencyKey();
+            return api('POST', '/response', body);
+        }).then(function (data) {
+            if (data && data.response) {
+                state.responseId = data.response.id;
+                state.responseVersion = data.response.rowVersion;
+                state.submitted = true;
+            }
+            if (data && data.rowVersion) {
+                state.journeyVersion = data.rowVersion;
+            }
+            save();
+        });
+    }
+
     function render() {
         var views = { invitation: invitation, page1: page1, page2: page2, results: results, thanks: thanks };
         var draw = views[state.view] || page1;
@@ -332,6 +579,13 @@
 
     function go(view) {
         state.view = view;
+        var step = view === 'page2' ? 2 : ((view === 'results' || view === 'thanks') ? 3 : 1);
+        if (view === 'results') {
+            track('results_started', 3);
+        } else {
+            track('step_viewed', step);
+        }
+        syncJourney();
         render();
         window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
         var shell = document.getElementById('bbgc-guide');
@@ -422,6 +676,7 @@
                 state.noAmount = false;
                 state.amountMeaning = '';
                 state.otherCategory = '';
+                track('coverage_not_found_selected', 2);
                 go('results');
                 break;
             case 'backguide':
@@ -448,9 +703,20 @@
                     showError('Enter the other section name, or leave the optional section question blank.');
                     return;
                 }
-                go('thanks');
+                if (actionEl) {
+                    actionEl.disabled = true;
+                }
+                submitResponse().then(function () {
+                    go('thanks');
+                }).catch(function (error) {
+                    if (actionEl) {
+                        actionEl.disabled = false;
+                    }
+                    showError(error.message || 'We could not save your answers. Please try again.');
+                });
                 break;
             case 'return':
+                track('return_to_babybrands_clicked', 3);
                 if (cfg.returnUrl) {
                     window.location.assign(cfg.returnUrl);
                 }
@@ -548,6 +814,9 @@
             }
         }
         save();
+        if (name === 'insurer' || name === 'account') {
+            syncJourney();
+        }
         var refresh = ['insurer', 'coverage', 'noAmount', 'category', 'account', 'brands', 'retailer'];
         if (name === 'timing' && state.retailer === 'I already purchased a breast pump') {
             refresh.push('timing');
@@ -568,6 +837,9 @@
         });
         if (event.target.open) {
             state.expanded.push(id);
+            if (id === 'account') {
+                track('help_opened', 2);
+            }
         }
         save();
     }, true);
@@ -582,7 +854,18 @@
         });
     }
 
+    document.addEventListener('click', function (event) {
+        var link = event.target.closest ? event.target.closest('a[data-event]') : null;
+        if (!link || !root.contains(link)) {
+            return;
+        }
+        track(link.getAttribute('data-event') || 'help_clicked', state.view === 'page2' ? 2 : 3);
+    });
+
     render();
+    ensureSession().then(function () {
+        render();
+    }).catch(function () {});
     if (window.jQuery) {
         window.jQuery(removeThemeSelect);
     }

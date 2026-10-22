@@ -17,6 +17,18 @@ define('BBGC_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('BBGC_PLUGIN_PATH', plugin_dir_path(__FILE__));
 
 require_once BBGC_PLUGIN_PATH . 'includes/directory.php';
+require_once BBGC_PLUGIN_PATH . 'includes/install.php';
+require_once BBGC_PLUGIN_PATH . 'includes/rest.php';
+require_once BBGC_PLUGIN_PATH . 'includes/admin.php';
+
+add_action('plugins_loaded', 'bbgc_maybe_install');
+register_activation_hook(BBGC_PLUGIN_FILE, 'bbgc_install');
+register_deactivation_hook(BBGC_PLUGIN_FILE, 'bbgc_deactivate');
+
+function bbgc_deactivate()
+{
+    wp_clear_scheduled_hook('bbgc_retention_daily');
+}
 
 /**
  * @param mixed $value
@@ -99,6 +111,10 @@ function bbgc_render_shortcode($atts)
     );
 
     $returnUrl = esc_url_raw($atts['return_url']);
+    $savedReturn = esc_url_raw((string) get_option('bbgc_return_url', ''));
+    if ($savedReturn !== '') {
+        $returnUrl = $savedReturn;
+    }
     if ($returnUrl === '') {
         $returnUrl = home_url('/');
     }
@@ -127,7 +143,10 @@ function bbgc_render_shortcode($atts)
         'campaign' => bbgc_request_campaign(),
         'start' => $start,
         'view' => $view,
-        'insurers' => bbgc_insurer_directory(),
+        'restUrl' => esc_url_raw(rest_url('bbgc/v1')),
+        'noticeVersion' => BBGC_NOTICE_VERSION,
+        'notice' => __('When you finish, BabyBrands will store your answers to improve this guide. Your answers are self-reported, not verified by BabyBrands.', 'breast-pump-insurance-plugin'),
+        'insurers' => bbgc_public_directory(),
         'privacy' => __('This guide asks only for the answers you choose to enter. Insurance logins, member numbers, prescriptions and medical documents are not collected here. Browsing the guide is not a signup for marketing.', 'breast-pump-insurance-plugin'),
         'about' => __('BabyBrands helps you navigate your insurer\'s website. It does not verify benefits or submit claims. Section names vary by plan; check eligibility and conditions with your insurer.', 'breast-pump-insurance-plugin'),
         'decline' => __('You can leave this optional guide and continue. Your registration is unchanged, and no insurance answers are required.', 'breast-pump-insurance-plugin'),
