@@ -1,0 +1,590 @@
+(function () {
+    'use strict';
+
+    var cfg = window.BBGC_GUIDE || {};
+    var root = document.getElementById('bbgc-view');
+    if (!root || !cfg.insurers) {
+        return;
+    }
+
+    var INSURERS = cfg.insurers;
+    var KEY = 'bbgc_guide_v1';
+    var PAGES = ['invitation', 'page1', 'page2', 'results', 'thanks'];
+    var DEFAULT = {
+        view: cfg.start === 'invitation' ? 'invitation' : 'page1',
+        insurer: '',
+        otherInsurer: '',
+        account: '',
+        coverage: '',
+        amount: '',
+        noAmount: false,
+        percent: '',
+        amountMeaning: '',
+        prescription: '',
+        category: '',
+        otherCategory: '',
+        ease: '',
+        comment: '',
+        brands: [],
+        otherBrand: '',
+        retailer: '',
+        otherRetailer: '',
+        timing: '',
+        expanded: [],
+        source: cfg.source || 'direct',
+        campaign: cfg.campaign || ''
+    };
+
+    var state = clone(DEFAULT);
+    try {
+        var stored = JSON.parse(sessionStorage.getItem(KEY));
+        if (stored && typeof stored === 'object') {
+            state = Object.assign({}, state, stored);
+            if (!Array.isArray(state.brands)) {
+                state.brands = [];
+            }
+            if (!Array.isArray(state.expanded)) {
+                state.expanded = [];
+            }
+        }
+    } catch (err) {
+        state = clone(DEFAULT);
+    }
+
+    if (cfg.view && PAGES.indexOf(cfg.view) !== -1) {
+        state.view = cfg.view;
+    }
+    if (cfg.source) {
+        state.source = cfg.source;
+    }
+    if (!state.insurer && (state.view === 'page2' || state.view === 'results' || state.view === 'thanks')) {
+        state.view = 'page1';
+    }
+
+    function clone(obj) {
+        return JSON.parse(JSON.stringify(obj));
+    }
+
+    function esc(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+            return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+        });
+    }
+
+    function icon(name) {
+        var paths = {
+            arrow: '<path d="M5 12h14m-5-5 5 5-5 5"/>',
+            external: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M20 14v6H4V4h6"/>',
+            check: '<path d="m5 12 4 4 10-10"/>',
+            back: '<path d="m14 6-6 6 6 6"/>'
+        };
+        return '<svg class="bbgc-icon" viewBox="0 0 24 24" aria-hidden="true">' + (paths[name] || paths.check) + '</svg>';
+    }
+
+    function save() {
+        try {
+            sessionStorage.setItem(KEY, JSON.stringify(state));
+        } catch (err) {
+            /* Private mode can block storage; the current view still works. */
+        }
+    }
+
+    function header() {
+        return '<header class="bbgc-header"><img class="bbgc-logo" src="' + esc(cfg.logoUrl) + '" alt="BabyBrands Gift Club" width="204" height="75"><div class="bbgc-caption">Breast Pump Insurance Guide</div><span class="bbgc-accent"></span></header>';
+    }
+
+    function footer() {
+        return '<footer class="bbgc-footer"><button type="button" data-modal="privacy">Privacy</button><span class="bbgc-micro">·</span><button type="button" data-modal="about">About this guide</button><p>BabyBrands Gift Club</p></footer>';
+    }
+
+    function step(n, label) {
+        var tracks = [1, 2, 3].map(function (i) {
+            return '<i class="' + (i <= n ? 'is-on' : '') + '"></i>';
+        }).join('');
+        return '<div class="bbgc-step"><span>STEP ' + n + ' OF 3 &nbsp; / &nbsp; ' + label + '</span><span class="bbgc-tracks" aria-hidden="true">' + tracks + '</span></div>';
+    }
+
+    function btn(label, action, cls, extra) {
+        return '<button type="button" class="bbgc-btn ' + (cls || 'bbgc-btn-primary') + '" data-action="' + action + '" ' + (extra || '') + '>' + label + icon('arrow') + '</button>';
+    }
+
+    function ext(label, url, style, evt) {
+        return '<a class="' + style + '" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" data-event="' + (evt || 'help_clicked') + '">' + label + icon('external') + '</a>';
+    }
+
+    function option(value, label, selected) {
+        return '<option value="' + esc(value) + '"' + (value === selected ? ' selected' : '') + '>' + esc(label) + '</option>';
+    }
+
+    function select(name, options, placeholder) {
+        var html = '<select id="' + name + '" name="' + name + '">' + option('', placeholder || 'Select an option', state[name]);
+        options.forEach(function (item) {
+            var value = Array.isArray(item) ? item[0] : item;
+            var label = Array.isArray(item) ? item[1] : item;
+            html += option(value, label, state[name]);
+        });
+        return html + '</select>';
+    }
+
+    function choices(name, options, stack) {
+        var html = '<div class="bbgc-choices' + (stack ? ' bbgc-stack' : '') + '">';
+        options.forEach(function (pair) {
+            html += '<label class="bbgc-choice"><input type="radio" name="' + name + '" value="' + esc(pair[0]) + '"' + (state[name] === pair[0] ? ' checked' : '') + '>' + icon('check') + '<span>' + esc(pair[1]) + '</span></label>';
+        });
+        return html + '</div>';
+    }
+
+    function details(id, label, content) {
+        var open = state.expanded.indexOf(id) !== -1 ? ' open' : '';
+        return '<details data-detail="' + id + '"' + open + '><summary>' + label + '</summary><div class="bbgc-details-inner">' + content + '</div></details>';
+    }
+
+    function insurer() {
+        return INSURERS[state.insurer] || INSURERS.other;
+    }
+
+    function insurerName() {
+        if (state.insurer === 'other') {
+            return state.otherInsurer || 'Your insurer';
+        }
+        return insurer().name;
+    }
+
+    function selectedRow() {
+        return '<div class="bbgc-insurer-row"><span class="bbgc-insurer-name">' + esc(insurerName()) + '</span><button type="button" class="bbgc-change" data-action="change">Change insurer</button></div>';
+    }
+
+    function invitation() {
+        return '<main class="bbgc-page bbgc-invitation bbgc-view"><div class="bbgc-badge">' + icon('check') + 'Registration complete</div><div class="bbgc-hero"><div class="bbgc-kicker"><span class="bbgc-dot"></span>A LITTLE EXTRA HELP FOR YOU</div><h1>Check if my insurance covers my breast pump — and for how much.</h1><p class="bbgc-intro">Your health plan may help with the cost. Our free guide shows you where to look.</p></div>' + btn('Check My Coverage', 'start') + '<div class="bbgc-minor-center"><button type="button" class="bbgc-minor" data-action="decline">No thanks, continue</button></div><p class="bbgc-entry-footer">Free to use · No obligation to purchase</p></main>';
+    }
+
+    function page1() {
+        var options = Object.keys(INSURERS).map(function (key) {
+            return [key, INSURERS[key].name];
+        });
+        var other = state.insurer === 'other'
+            ? '<div class="bbgc-field"><label class="bbgc-label" for="otherInsurer">Insurance company name <span class="bbgc-optional">(optional)</span></label><input type="text" id="otherInsurer" name="otherInsurer" maxlength="100" placeholder="Type the name" value="' + esc(state.otherInsurer) + '"></div>'
+            : '';
+        return '<main class="bbgc-page bbgc-view">' + step(1, 'YOUR INSURER') + '<div class="bbgc-hero"><h1>Your Insurance Could Help Pay for Your Breast Pump!</h1><p class="bbgc-intro">Find out if your plan covers a breast pump and how much you may be eligible to receive.</p></div><div class="bbgc-field"><label class="bbgc-label" for="insurer">Which insurance company do you have?</label>' + select('insurer', options, 'Select your insurance company') + '</div>' + other + btn('Check My Breast Pump Coverage', 'guide', 'bbgc-btn-primary', state.insurer ? '' : 'disabled') + '<p class="bbgc-micro is-center bbgc-sp18">Free to use · No obligation to purchase</p></main>';
+    }
+
+    function accountHelp() {
+        var current = insurer();
+        var html = '<p class="bbgc-label">Have you already created an online account with your insurance company?</p>' + choices('account', [
+            ['yes', 'Yes, I have an account and have logged in before.'],
+            ['no', 'No, I need to create an account.'],
+            ['unsure', 'I\'m not sure / I need help accessing my account.']
+        ], true);
+        if (state.account) {
+            html += '<p class="bbgc-sp12">' + esc(current.login) + '</p>';
+        }
+        if (state.account === 'no' && current.register) {
+            html += '<div class="bbgc-help-links">' + ext('Registration help', current.register, 'bbgc-minor', 'registration_help_clicked') + '</div>';
+        }
+        if (state.account === 'unsure') {
+            html += '<p class="bbgc-sp12">On your insurer\'s sign-in page, use the account-recovery options. Do not create a second account if you already have one.</p>';
+        }
+        return html;
+    }
+
+    function page2() {
+        var current = insurer();
+        var known = !!current.url;
+        var name = insurerName();
+        var html = '<main class="bbgc-page bbgc-view">' + step(2, 'FIND YOUR COVERAGE') + selectedRow();
+        html += '<div class="bbgc-guide-heading"><h1>' + (known ? 'Let\'s find your ' + esc(name) + ' coverage.' : 'Find the right insurance website.') + '</h1>';
+        html += '<p class="bbgc-intro">' + (known
+            ? 'Sign in on your insurer\'s website, then come back here to share what you find.'
+            : 'Look at your benefit card or ask your plan administrator for the official website. You can still continue if you cannot find it.') + '</p></div>';
+
+        if (known) {
+            html += ext('Go to ' + esc(name) + ' Website', current.url, 'bbgc-btn bbgc-btn-dark bbgc-website', 'insurer_website_clicked');
+            html += '<p class="bbgc-newtab">Opens in a new tab. Keep this BabyBrands page open so you can return.</p>';
+            html += details('account', 'Need help signing in?', accountHelp());
+            html += '<h2 class="bbgc-guide-title">' + esc(current.areas_heading || 'Places to check in your plan') + '</h2>';
+            html += '<p class="bbgc-micro">' + esc(current.areas_note || '') + '</p>';
+            if (current.show_route) {
+                html += '<div class="bbgc-route"><strong>On the website:</strong> Health → your plan → Coverage search</div>';
+            }
+            html += '<div class="bbgc-area-list">' + (current.areas || []).map(function (area, index) {
+                return '<section class="bbgc-area"><span class="bbgc-num">' + (index + 1) + '</span><div><h3>' + esc(area[0]) + '</h3><p>' + esc(area[1]) + '</p></div></section>';
+            }).join('') + '</div>';
+            html += '<p class="bbgc-note">A general equipment or spending-account balance is not a breast pump allowance. Confirm that breast pumps qualify under your plan.</p>';
+            if (current.help) {
+                html += '<div class="bbgc-minor-center">' + ext('View ' + esc(name) + '\'s official guide', current.help, 'bbgc-minor', 'help_clicked') + '</div>';
+            }
+        } else {
+            html += '<div class="bbgc-status">Use only the official website shown on your insurance card or plan documents.</div>';
+        }
+
+        html += '<div class="bbgc-next">' + btn('I\'ve Checked My Benefits', 'results') + '<div class="bbgc-minor-center"><button type="button" class="bbgc-minor" data-action="notfound">I couldn\'t find my coverage</button></div></div>';
+        html += '<button type="button" class="bbgc-back" data-action="change">' + icon('back') + 'Back</button></main>';
+        return html;
+    }
+
+    function amountPanel() {
+        return '<div class="bbgc-money"><label class="bbgc-label" for="amount">How much is available toward your breast pump?</label><p class="bbgc-micro">Enter the dollar amount your insurer showed specifically for a breast pump.</p><div class="bbgc-money-input"><span class="bbgc-currency">$</span><input type="text" inputmode="decimal" id="amount" name="amount" value="' + esc(state.amount) + '" placeholder="e.g. 300" autocomplete="off" ' + (state.noAmount ? 'disabled' : '') + '><span class="bbgc-cad">CAD</span></div><label class="bbgc-check"><input type="checkbox" name="noAmount" ' + (state.noAmount ? 'checked' : '') + '>I couldn\'t find a dollar amount</label>' + details('percent', 'Percentage or other benefit details <span class="bbgc-optional">(optional)</span>', '<div class="bbgc-field"><label class="bbgc-label" for="percent">Reimbursement percentage</label><input type="text" inputmode="decimal" name="percent" id="percent" value="' + esc(state.percent) + '" placeholder="e.g. 80" maxlength="6"><small class="bbgc-help">Leave blank if your plan does not show one.</small></div><div class="bbgc-field"><label class="bbgc-label" for="amountMeaning">What does the dollar figure describe?</label>' + select('amountMeaning', [['remaining', 'Remaining breast-pump allowance'], ['reimbursement_limit', 'Maximum insurer reimbursement'], ['eligible_expense_limit', 'Maximum eligible purchase expense'], ['shared_balance', 'General equipment / spending-account balance'], ['unknown', 'I\'m not sure']], 'Select if you know') + '</div>') + '</div>';
+    }
+
+    function coverageFields() {
+        var categories = (insurer().categories || []).concat(['Other - please specify']);
+        var other = state.category === 'Other - please specify'
+            ? '<div class="bbgc-field"><label class="bbgc-label" for="otherCategory">What was the section called?</label><input type="text" id="otherCategory" name="otherCategory" value="' + esc(state.otherCategory) + '" placeholder="Enter the section name" maxlength="120"><small class="bbgc-help">Only the heading, please. No member numbers or personal medical details.</small></div>'
+            : '';
+        return amountPanel() + '<fieldset class="bbgc-field"><legend class="bbgc-label">Does your insurer require a prescription for reimbursement?</legend>' + choices('prescription', [['yes', 'Yes'], ['no', 'No'], ['unknown', 'Not sure']]) + '<small class="bbgc-help">Check whether a doctor or midwife prescription is accepted by your plan.</small></fieldset><div class="bbgc-field"><label class="bbgc-label" for="category">Where did you find the information? <span class="bbgc-optional">(optional)</span></label>' + select('category', categories, 'Select the section') + '<small class="bbgc-help">This helps us improve the guide for other parents.</small></div>' + other;
+    }
+
+    function feedback() {
+        return '<fieldset class="bbgc-field"><legend class="bbgc-label">How easy was it to find your coverage?</legend>' + choices('ease', [['very_easy', 'Very easy'], ['somewhat_easy', 'Somewhat easy'], ['difficult', 'Difficult'], ['not_found', 'I couldn\'t find it']], true) + '</fieldset><div class="bbgc-field"><label class="bbgc-label" for="comment">Any suggestions? <span class="bbgc-optional">(optional)</span></label><textarea id="comment" name="comment" maxlength="500" placeholder="Tell us what would make this easier...">' + esc(state.comment) + '</textarea><small class="bbgc-help">Please don\'t include policy numbers or medical details.</small></div>';
+    }
+
+    function shopping() {
+        var brands = ['Medela', 'Momcozy', 'Spectra', 'Philips Avent', 'Lansinoh', 'Elvie', 'Willow', 'Other', 'I haven\'t decided yet'];
+        var brandHtml = brands.map(function (brand) {
+            var checked = state.brands.indexOf(brand) !== -1 ? 'checked' : '';
+            return '<label class="bbgc-check"><input type="checkbox" name="brands" value="' + esc(brand) + '" ' + checked + '>' + esc(brand) + '</label>';
+        }).join('');
+        var otherBrand = state.brands.indexOf('Other') !== -1
+            ? '<input type="text" name="otherBrand" maxlength="100" value="' + esc(state.otherBrand) + '" placeholder="Other brand name" aria-label="Other brand name">'
+            : '';
+        var otherRetailer = state.retailer === 'Other retailer'
+            ? '<div class="bbgc-field"><input type="text" name="otherRetailer" maxlength="100" value="' + esc(state.otherRetailer) + '" placeholder="Other retailer name" aria-label="Other retailer name"></div>'
+            : '';
+        return '<fieldset class="bbgc-field"><legend class="bbgc-label">Which breast pump brands are you considering?</legend><p class="bbgc-micro">Select all that apply. No model selection needed.</p><div class="bbgc-rows">' + brandHtml + '</div>' + otherBrand + '</fieldset><div class="bbgc-field"><label class="bbgc-label" for="retailer">Where are you planning to purchase?</label>' + select('retailer', ['Amazon.ca', 'Walmart', 'Best Buy', 'Baby specialty store', 'Pharmacy / medical supply store', 'Directly from the manufacturer', 'Other retailer', 'I haven\'t decided yet', 'I already purchased a breast pump'], 'Select a retailer') + '</div>' + otherRetailer + '<div class="bbgc-field"><label class="bbgc-label" for="timing">When are you planning to buy?</label>' + select('timing', ['Within 30 days', 'Within 1-3 months', 'More than 3 months from now', 'I already purchased one', 'I haven\'t decided'], 'Select a time frame') + '</div>';
+    }
+
+    function results() {
+        var html = '<main class="bbgc-page bbgc-view">' + step(3, 'YOUR RESULTS') + selectedRow();
+        html += '<h1 class="bbgc-form-title">What did you find?</h1><p class="bbgc-form-intro">Tell us what your insurer showed. It\'s okay if you couldn\'t find an answer.</p>';
+        html += '<div class="bbgc-error" id="bbgc-form-error" role="alert"></div>';
+        html += '<fieldset class="bbgc-field bbgc-coverage"><legend class="bbgc-label">Does your plan cover breast pumps?</legend>' + choices('coverage', [['yes', 'Yes'], ['no', 'No'], ['unclear', 'Couldn\'t confirm']]) + '</fieldset>';
+        if (state.coverage === 'yes') {
+            html += coverageFields();
+        } else if (state.coverage === 'no') {
+            html += '<div class="bbgc-status">Thanks for checking. You can still help us improve the guide with the optional feedback below.</div>';
+        } else if (state.coverage === 'unclear') {
+            html += '<div class="bbgc-status">Please don\'t enter a guess. Your insurer or plan administrator can confirm eligibility and any amount.</div>';
+        }
+        html += '<p class="bbgc-optional-heading">A little extra help · optional</p>';
+        html += details('feedback', 'Help us improve this guide', feedback());
+        html += details('shopping', 'Your breast pump shopping plans', shopping());
+        html += '<div class="bbgc-submit">' + btn('Finish & See My Summary', 'finish');
+        html += '<p class="bbgc-micro is-center bbgc-sp12">Your answers are self-reported, not verified by BabyBrands.</p></div>';
+        html += '<button type="button" class="bbgc-back" data-action="backguide">' + icon('back') + 'Back to the guide</button></main>';
+        return html;
+    }
+
+    function thanks() {
+        var entered = state.coverage === 'yes' && !state.noAmount && state.amount !== '';
+        var money = 'Not confirmed';
+        if (entered) {
+            var number = Number(String(state.amount).replace(/,/g, ''));
+            money = number.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 2 });
+        }
+        var title = state.amountMeaning === 'shared_balance' ? 'Reported shared-category balance' : 'Dollar amount you reported';
+        var coverageLabel = {
+            yes: 'Yes - reported by you',
+            no: 'No - reported by you',
+            unclear: 'Not confirmed'
+        }[state.coverage] || 'Not provided';
+        var html = '<main class="bbgc-page bbgc-success bbgc-view"><div class="bbgc-success-icon">' + icon('check') + '</div><div class="bbgc-kicker" style="justify-content:center">GUIDE COMPLETE</div><h1>Thank you for helping other parents.</h1><p class="bbgc-intro">Here\'s a summary of what you entered.</p>';
+        html += '<div class="bbgc-summary"><div class="bbgc-summary-title">Your reported results</div>';
+        html += '<div class="bbgc-summary-row"><small>Insurance company</small><strong>' + esc(insurerName()) + '</strong></div>';
+        html += '<div class="bbgc-summary-row"><small>Breast pump coverage</small><strong>' + esc(coverageLabel) + '</strong></div>';
+        html += '<div class="bbgc-summary-row is-amount"><small>' + esc(title) + '</small><strong>' + esc(money) + '</strong><small>CAD · Not a payment guarantee</small></div>';
+        if (state.percent && state.coverage === 'yes') {
+            html += '<div class="bbgc-summary-row"><small>Reported reimbursement percentage</small><strong>' + esc(state.percent) + '%</strong></div>';
+        }
+        if (state.category && state.coverage === 'yes') {
+            var found = state.category === 'Other - please specify' ? state.otherCategory : state.category;
+            html += '<div class="bbgc-summary-row"><small>Where you found it</small><strong>' + esc(found) + '</strong></div>';
+        }
+        if (state.prescription && state.coverage === 'yes') {
+            var prescription = { yes: 'Yes', no: 'No', unknown: 'Not sure' }[state.prescription] || '';
+            html += '<div class="bbgc-summary-row"><small>Prescription required</small><strong>' + esc(prescription) + '</strong></div>';
+        }
+        html += '</div><p class="bbgc-note" style="text-align:left">Your insurer decides eligibility and reimbursement. A dollar limit may be subject to a percentage, remaining benefits and other conditions.</p>';
+        html += btn('Return to BabyBrands', 'return', 'bbgc-btn-dark');
+        html += '<div class="bbgc-minor-center"><button type="button" class="bbgc-minor" data-action="edit">Edit my answers</button></div></main>';
+        return html;
+    }
+
+    function removeThemeSelect() {
+        var shell = document.getElementById('bbgc-guide');
+        if (!shell) {
+            return;
+        }
+        shell.querySelectorAll('.nice-select, .select2, .chosen-container').forEach(function (node) {
+            node.remove();
+        });
+        shell.querySelectorAll('select').forEach(function (select) {
+            select.style.display = '';
+        });
+    }
+
+    function render() {
+        var views = { invitation: invitation, page1: page1, page2: page2, results: results, thanks: thanks };
+        var draw = views[state.view] || page1;
+        root.innerHTML = header() + draw() + footer();
+        save();
+        removeThemeSelect();
+    }
+
+    function go(view) {
+        state.view = view;
+        render();
+        window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
+        var shell = document.getElementById('bbgc-guide');
+        if (shell && shell.scrollIntoView) {
+            shell.scrollIntoView({ block: 'start' });
+        }
+    }
+
+    function tell(title, body) {
+        var dialog = document.getElementById('bbgc-notice');
+        document.getElementById('bbgc-notice-title').textContent = title;
+        document.getElementById('bbgc-notice-body').textContent = body;
+        if (dialog && dialog.showModal) {
+            dialog.showModal();
+        }
+    }
+
+    function resetCoverage() {
+        state.account = '';
+        state.coverage = '';
+        state.amount = '';
+        state.noAmount = false;
+        state.percent = '';
+        state.amountMeaning = '';
+        state.prescription = '';
+        state.category = '';
+        state.otherCategory = '';
+        state.ease = '';
+        state.comment = '';
+        state.expanded = [];
+    }
+
+    function showError(message) {
+        var el = document.getElementById('bbgc-form-error');
+        if (!el) {
+            return;
+        }
+        el.textContent = message;
+        el.classList.add('is-shown');
+        el.setAttribute('tabindex', '-1');
+        el.focus();
+        el.scrollIntoView({ block: 'center' });
+    }
+
+    document.addEventListener('click', function (event) {
+        var modal = event.target.closest('[data-modal]');
+        if (modal && root.contains(modal)) {
+            if (modal.getAttribute('data-modal') === 'privacy') {
+                tell('Privacy', cfg.privacy || '');
+            } else {
+                tell('About the guide', cfg.about || '');
+            }
+        }
+
+        var actionEl = event.target.closest('[data-action]');
+        if (!actionEl || !root.contains(actionEl)) {
+            return;
+        }
+
+        switch (actionEl.getAttribute('data-action')) {
+            case 'start':
+                go('page1');
+                break;
+            case 'decline':
+                if (cfg.returnUrl) {
+                    window.location.assign(cfg.returnUrl);
+                } else {
+                    tell('Continue without the guide', cfg.decline || '');
+                }
+                break;
+            case 'guide':
+                if (state.insurer) {
+                    go('page2');
+                }
+                break;
+            case 'change':
+                go('page1');
+                break;
+            case 'results':
+                go('results');
+                break;
+            case 'notfound':
+                state.coverage = 'unclear';
+                state.amount = '';
+                state.percent = '';
+                state.category = '';
+                state.prescription = '';
+                state.noAmount = false;
+                state.amountMeaning = '';
+                state.otherCategory = '';
+                go('results');
+                break;
+            case 'backguide':
+                go('page2');
+                break;
+            case 'finish':
+                if (!state.coverage) {
+                    showError('Please tell us whether you found coverage, or choose "Couldn\'t confirm".');
+                    return;
+                }
+                if (state.coverage === 'yes' && !state.noAmount) {
+                    var value = String(state.amount).replace(/,/g, '').trim();
+                    if (!/^\d+(\.\d{1,2})?$/.test(value) || !isFinite(Number(value)) || Number(value) < 0 || Number(value) > 1000000) {
+                        showError('Enter a valid dollar amount, or select "I couldn\'t find a dollar amount".');
+                        return;
+                    }
+                    state.amount = value;
+                }
+                if (state.coverage === 'yes' && state.percent && (!/^\d+(\.\d{1,2})?$/.test(state.percent) || Number(state.percent) > 100 || Number(state.percent) < 0)) {
+                    showError('Enter a percentage between 0 and 100, or leave it blank.');
+                    return;
+                }
+                if (state.coverage === 'yes' && state.category === 'Other - please specify' && !String(state.otherCategory).trim()) {
+                    showError('Enter the other section name, or leave the optional section question blank.');
+                    return;
+                }
+                go('thanks');
+                break;
+            case 'return':
+                if (cfg.returnUrl) {
+                    window.location.assign(cfg.returnUrl);
+                }
+                break;
+            case 'edit':
+                go('results');
+                break;
+            default:
+                break;
+        }
+    });
+
+    document.addEventListener('input', function (event) {
+        var name = event.target.name;
+        if (!name || !(name in state) || !root.contains(event.target)) {
+            return;
+        }
+        if (event.target.type === 'radio' || event.target.type === 'checkbox' || event.target.tagName === 'SELECT') {
+            return;
+        }
+        if (name === 'amount' || name === 'percent') {
+            var cleaned = String(event.target.value).replace(/[^\d.]/g, '');
+            var parts = cleaned.split('.');
+            if (parts.length > 1) {
+                cleaned = parts[0] + '.' + parts.slice(1).join('').slice(0, 2);
+            }
+            if (event.target.value !== cleaned) {
+                event.target.value = cleaned;
+            }
+            state[name] = cleaned;
+            save();
+            return;
+        }
+        state[name] = event.target.value;
+        save();
+    });
+
+    document.addEventListener('change', function (event) {
+        var name = event.target.name;
+        if (!name || !(name in state) || !root.contains(event.target)) {
+            return;
+        }
+        var scrollY = window.scrollY;
+        if (name === 'brands') {
+            var brand = event.target.value;
+            if (event.target.checked) {
+                if (brand === 'I haven\'t decided yet') {
+                    state.brands = [brand];
+                } else {
+                    state.brands = state.brands.filter(function (item) {
+                        return item !== 'I haven\'t decided yet';
+                    });
+                    if (state.brands.indexOf(brand) === -1) {
+                        state.brands.push(brand);
+                    }
+                }
+            } else {
+                state.brands = state.brands.filter(function (item) {
+                    return item !== brand;
+                });
+            }
+            if (state.brands.indexOf('Other') === -1) {
+                state.otherBrand = '';
+            }
+        } else if (name === 'noAmount') {
+            state.noAmount = event.target.checked;
+            if (state.noAmount) {
+                state.amount = '';
+            }
+        } else if (name === 'insurer') {
+            if (state.insurer !== event.target.value) {
+                resetCoverage();
+                state.insurer = event.target.value;
+                state.otherInsurer = '';
+            }
+        } else {
+            state[name] = event.target.value;
+            if (name === 'coverage' && state.coverage !== 'yes') {
+                state.amount = '';
+                state.noAmount = false;
+                state.percent = '';
+                state.amountMeaning = '';
+                state.prescription = '';
+                state.category = '';
+                state.otherCategory = '';
+            }
+            if (name === 'category' && state.category !== 'Other - please specify') {
+                state.otherCategory = '';
+            }
+            if (name === 'retailer' && state.retailer !== 'Other retailer') {
+                state.otherRetailer = '';
+            }
+            if (state.retailer === 'I already purchased a breast pump') {
+                state.timing = 'I already purchased one';
+            }
+        }
+        save();
+        var refresh = ['insurer', 'coverage', 'noAmount', 'category', 'account', 'brands', 'retailer'];
+        if (name === 'timing' && state.retailer === 'I already purchased a breast pump') {
+            refresh.push('timing');
+        }
+        if (refresh.indexOf(name) !== -1) {
+            render();
+            window.scrollTo(0, scrollY);
+        }
+    });
+
+    document.addEventListener('toggle', function (event) {
+        if (!event.target.matches || !event.target.matches('details[data-detail]') || !root.contains(event.target)) {
+            return;
+        }
+        var id = event.target.getAttribute('data-detail');
+        state.expanded = state.expanded.filter(function (item) {
+            return item !== id;
+        });
+        if (event.target.open) {
+            state.expanded.push(id);
+        }
+        save();
+    }, true);
+
+    var closeNotice = document.getElementById('bbgc-close-notice');
+    if (closeNotice) {
+        closeNotice.addEventListener('click', function () {
+            var dialog = document.getElementById('bbgc-notice');
+            if (dialog) {
+                dialog.close();
+            }
+        });
+    }
+
+    render();
+    if (window.jQuery) {
+        window.jQuery(removeThemeSelect);
+    }
+    window.setTimeout(removeThemeSelect, 0);
+}());
