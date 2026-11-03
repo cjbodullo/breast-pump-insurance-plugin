@@ -1,9 +1,9 @@
 <?php
 /**
  * Plugin Name: Breast Pump Insurance Guide
- * Description: Mobile-first BabyBrands guide that helps parents find breast pump coverage on their own insurer website. Shortcode: [bbgc_insurance_guide]
+ * Description: Mobile-first BabyBrands Gift Club guide that helps parents find breast pump coverage on their own insurer website. Shortcode: [bbgc_insurance_guide]
  * Version: 1.0.0
- * Author: BabyBrands
+ * Author: BabyBrands Gift Club
  * Text Domain: breast-pump-insurance-plugin
  */
 
@@ -145,10 +145,10 @@ function bbgc_render_shortcode($atts)
         'view' => $view,
         'restUrl' => esc_url_raw(rest_url('bbgc/v1')),
         'noticeVersion' => BBGC_NOTICE_VERSION,
-        'notice' => __('When you finish, BabyBrands will store your answers to improve this guide. Your answers are self-reported, not verified by BabyBrands.', 'breast-pump-insurance-plugin'),
+        'notice' => __('When you finish, BabyBrands Gift Club will store your answers to improve this guide. Your answers are self-reported, not verified by BabyBrands Gift Club.', 'breast-pump-insurance-plugin'),
         'insurers' => bbgc_public_directory(),
         'privacy' => __('This guide asks only for the answers you choose to enter. Insurance logins, member numbers, prescriptions and medical documents are not collected here. Browsing the guide is not a signup for marketing.', 'breast-pump-insurance-plugin'),
-        'about' => __('BabyBrands helps you navigate your insurer\'s website. It does not verify benefits or submit claims. Section names vary by plan; check eligibility and conditions with your insurer.', 'breast-pump-insurance-plugin'),
+        'about' => __('BabyBrands Gift Club  helps you navigate your insurer\'s website. It does not verify benefits or submit claims. Section names vary by plan; check eligibility and conditions with your insurer.', 'breast-pump-insurance-plugin'),
         'decline' => __('You can leave this optional guide and continue. Your registration is unchanged, and no insurance answers are required.', 'breast-pump-insurance-plugin'),
     ]);
 
