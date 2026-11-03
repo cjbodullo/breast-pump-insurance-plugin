@@ -10,8 +10,8 @@ if (!defined('ABSPATH')) {
 function bbgc_admin_menu()
 {
     add_menu_page(
-        'Breast Pump Guide',
-        'Breast Pump Guide',
+        'Breast Pump Insurance Guide',
+        'Breast Pump Insurance Guide',
         'bbgc_view_reports',
         'bbgc-guide',
         'bbgc_admin_overview',
@@ -127,7 +127,7 @@ function bbgc_admin_overview()
     $engagement = $page2 > 0 ? round(($clicks / $page2) * 100, 1) : 0;
     $positive = $submitted > 0 ? round(($yes / $submitted) * 100, 1) : 0;
 
-    echo '<div class="wrap"><h1>Breast pump guide</h1>';
+    echo '<div class="wrap"><h1>Breast pump insurance guide</h1>';
     echo '<p>Counts are journeys or submitted responses, not unique people. A link click is intent to open the insurer site, not proof of a login.</p>';
     bbgc_admin_filter_form($filters);
     echo '<table class="widefat striped" style="max-width:760px"><tbody>';
