@@ -160,7 +160,3 @@ Colours live on `.bbgc-shell` and can be overridden from the theme:
 ```
 
 The guide column is 440px wide and mobile-first.
-
-## Reference files
-
-`BabyBrands_Mobile_Insurance_Preview.html` and `BabyBrands_WordPress_Developer_Specification.pdf` sit in the plugin folder for reference. WordPress does not load them. The root `babybrands-logo.png` is unused; the header uses the SVG.
