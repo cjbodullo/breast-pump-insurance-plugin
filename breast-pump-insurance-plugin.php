@@ -3,7 +3,7 @@
  * Plugin Name: Breast Pump Insurance Guide
  * Description: Mobile-first BabyBrands Gift Club guide that helps parents find breast pump coverage on their own insurer website. Shortcode: [bbgc_insurance_guide]
  * Version: 1.0.0
- * Author: BabyBrands Gift Club
+ * Author: Samplits
  * Text Domain: breast-pump-insurance-plugin
  */
 
