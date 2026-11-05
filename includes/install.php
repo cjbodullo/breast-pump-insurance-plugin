@@ -7,8 +7,8 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('BBGC_DB_VERSION', '1');
-define('BBGC_NOTICE_VERSION', '2026-10-19');
+define('BBGC_DB_VERSION', '2');
+define('BBGC_NOTICE_VERSION', '2026-11-05');
 
 function bbgc_table($name)
 {
@@ -136,6 +136,7 @@ function bbgc_install()
         journey_id bigint(20) unsigned NOT NULL,
         insurer_id bigint(20) unsigned DEFAULT NULL,
         coverage_status varchar(20) NOT NULL,
+        email varchar(190) NOT NULL DEFAULT '',
         amount_cad decimal(12,2) DEFAULT NULL,
         amount_not_found tinyint(1) NOT NULL DEFAULT 0,
         reimbursement_percent decimal(5,2) DEFAULT NULL,

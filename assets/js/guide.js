@@ -16,6 +16,7 @@
         otherInsurer: '',
         account: '',
         coverage: '',
+        email: '',
         amount: '',
         noAmount: false,
         percent: '',
@@ -211,7 +212,7 @@
 
         if (known) {
             html += ext('Go to ' + esc(name) + ' Website', current.url, 'bbgc-btn bbgc-btn-dark bbgc-website', 'insurer_website_clicked');
-            html += '<p class="bbgc-newtab">Opens in a new tab. Keep this BabyBrands page open so you can return.</p>';
+            html += '<p class="bbgc-newtab">Opens in a new tab and continues to your results here so you can report what you find.</p>';
             html += details('account', 'Need help signing in?', accountHelp());
             html += '<h2 class="bbgc-guide-title">' + esc(current.areas_heading || 'Places to check in your plan') + '</h2>';
             html += '<p class="bbgc-micro">' + esc(current.areas_note || '') + '</p>';
@@ -237,16 +238,69 @@
         return html;
     }
 
-    function amountPanel() {
-        return '<div class="bbgc-money"><label class="bbgc-label" for="amount">How much is available toward your breast pump?</label><p class="bbgc-micro">Enter the dollar amount your insurer showed specifically for a breast pump.</p><div class="bbgc-money-input"><span class="bbgc-currency">$</span><input type="text" inputmode="decimal" id="amount" name="amount" value="' + esc(state.amount) + '" placeholder="e.g. 300" autocomplete="off" ' + (state.noAmount ? 'disabled' : '') + '><span class="bbgc-cad">CAD</span></div><label class="bbgc-check"><input type="checkbox" name="noAmount" ' + (state.noAmount ? 'checked' : '') + '>I couldn\'t find a dollar amount</label>' + details('percent', 'Percentage or other benefit details <span class="bbgc-optional">(optional)</span>', '<div class="bbgc-field"><label class="bbgc-label" for="percent">Reimbursement percentage</label><input type="text" inputmode="decimal" name="percent" id="percent" value="' + esc(state.percent) + '" placeholder="e.g. 80" maxlength="6"><small class="bbgc-help">Leave blank if your plan does not show one.</small></div><div class="bbgc-field"><label class="bbgc-label" for="amountMeaning">What does the dollar figure describe?</label>' + select('amountMeaning', [['remaining', 'Remaining breast-pump allowance'], ['reimbursement_limit', 'Maximum insurer reimbursement'], ['eligible_expense_limit', 'Maximum eligible purchase expense'], ['shared_balance', 'General equipment / spending-account balance'], ['unknown', 'I\'m not sure']], 'Select if you know') + '</div>') + '</div>';
+    function emailField() {
+        return '<div class="bbgc-field"><label class="bbgc-label" for="email">Email</label><input type="email" name="email" id="email" value="' + esc(state.email) + '" placeholder="name@example.com" maxlength="190" autocomplete="email" required><small class="bbgc-help">Use the email from your BabyBrands registration.</small></div>';
     }
 
-    function coverageFields() {
+    function isValidEmail(value) {
+        var email = String(value || '').trim();
+        return email !== '' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 190;
+    }
+
+    function amountPanel() {
+        var percentDisplay = state.percent === '' ? '' : esc(state.percent) + '%';
+        return '<div class="bbgc-money"><label class="bbgc-label" for="amount">How much is available toward your breast pump?</label><p class="bbgc-micro">Enter the dollar amount your insurer showed specifically for a breast pump.</p><div class="bbgc-money-input"><span class="bbgc-currency">$</span><input type="text" inputmode="decimal" id="amount" name="amount" value="' + esc(state.amount) + '" placeholder="e.g. 300" autocomplete="off" ' + (state.noAmount ? 'disabled' : '') + '><span class="bbgc-cad">CAD</span></div><label class="bbgc-check"><input type="checkbox" name="noAmount" ' + (state.noAmount ? 'checked' : '') + '>I couldn\'t find a dollar amount</label>' + details('percent', 'Percentage or other benefit details <span class="bbgc-optional">(optional)</span>', '<div class="bbgc-field"><label class="bbgc-label" for="percent">Reimbursement percentage</label><div class="bbgc-percent-input"><input type="text" inputmode="decimal" name="percent" id="percent" value="' + percentDisplay + '" placeholder="e.g. 80%" maxlength="6" autocomplete="off" aria-describedby="bbgc-percent-help"></div><small class="bbgc-help" id="bbgc-percent-help">Enter a value from 0 to 100. Leave blank if your plan does not show one.</small></div><div class="bbgc-field"><label class="bbgc-label" for="amountMeaning">What does the dollar figure describe?</label>' + select('amountMeaning', [['remaining', 'Remaining breast-pump allowance'], ['reimbursement_limit', 'Maximum insurer reimbursement'], ['eligible_expense_limit', 'Maximum eligible purchase expense'], ['shared_balance', 'General equipment / spending-account balance'], ['unknown', 'I\'m not sure']], 'Select if you know') + '</div>') + '</div>';
+    }
+
+    /**
+     * Keep digits/decimals only: max 3 digits before the decimal, 2 after.
+     */
+    function normalizePercent(raw) {
+        var cleaned = String(raw || '').replace(/[^\d.]/g, '');
+        var parts = cleaned.split('.');
+        var whole = parts[0].slice(0, 3);
+        if (parts.length > 1) {
+            cleaned = whole + '.' + parts.slice(1).join('').slice(0, 2);
+        } else {
+            cleaned = whole;
+        }
+        if (cleaned === '' || cleaned === '.') {
+            return '';
+        }
+        return cleaned;
+    }
+
+    function isValidPercent(value) {
+        return value === '' || (/^\d{1,3}(\.\d{1,2})?$/.test(value) && Number(value) >= 0 && Number(value) <= 100);
+    }
+
+    /**
+     * Live typing helper: strip non-numeric chars, max 3 integer digits.
+     */
+    function sanitizePercentTyping(raw) {
+        var typing = String(raw || '').replace(/[^\d.]/g, '');
+        var parts = typing.split('.');
+        var whole = parts[0].slice(0, 3);
+        if (parts.length > 1) {
+            return whole + '.' + parts.slice(1).join('').slice(0, 2);
+        }
+        return whole;
+    }
+
+    function prescriptionField() {
+        return '<fieldset class="bbgc-field"><legend class="bbgc-label">Does your insurer require a prescription for reimbursement?</legend>' + choices('prescription', [['yes', 'Yes'], ['no', 'No'], ['unknown', 'Not sure']]) + '<small class="bbgc-help">Check whether a doctor or midwife prescription is accepted by your plan.</small></fieldset>';
+    }
+
+    function categoryField() {
         var categories = (insurer().categories || []).concat(['Other - please specify']);
         var other = state.category === 'Other - please specify'
             ? '<div class="bbgc-field"><label class="bbgc-label" for="otherCategory">What was the section called?</label><input type="text" id="otherCategory" name="otherCategory" value="' + esc(state.otherCategory) + '" placeholder="Enter the section name" maxlength="120"><small class="bbgc-help">Only the heading, please. No member numbers or personal medical details.</small></div>'
             : '';
-        return amountPanel() + '<fieldset class="bbgc-field"><legend class="bbgc-label">Does your insurer require a prescription for reimbursement?</legend>' + choices('prescription', [['yes', 'Yes'], ['no', 'No'], ['unknown', 'Not sure']]) + '<small class="bbgc-help">Check whether a doctor or midwife prescription is accepted by your plan.</small></fieldset><div class="bbgc-field"><label class="bbgc-label" for="category">Where did you find the information? <span class="bbgc-optional">(optional)</span></label>' + select('category', categories, 'Select the section') + '<small class="bbgc-help">This helps us improve the guide for other parents.</small></div>' + other;
+        return '<div class="bbgc-field"><label class="bbgc-label" for="category">Where did you find the information? <span class="bbgc-optional">(optional)</span></label>' + select('category', categories, 'Select the section') + '<small class="bbgc-help">This helps us improve the guide for other parents.</small></div>' + other;
+    }
+
+    function coverageFields() {
+        return amountPanel();
     }
 
     function feedback() {
@@ -262,10 +316,10 @@
         var otherBrand = state.brands.indexOf('Other') !== -1
             ? '<input type="text" name="otherBrand" maxlength="100" value="' + esc(state.otherBrand) + '" placeholder="Other brand name" aria-label="Other brand name">'
             : '';
-        var otherRetailer = state.retailer === 'Other retailer'
+        var otherRetailer = state.retailer === 'Other'
             ? '<div class="bbgc-field"><input type="text" name="otherRetailer" maxlength="100" value="' + esc(state.otherRetailer) + '" placeholder="Other retailer name" aria-label="Other retailer name"></div>'
             : '';
-        return '<fieldset class="bbgc-field"><legend class="bbgc-label">Which breast pump brands are you considering?</legend><p class="bbgc-micro">Select all that apply. No model selection needed.</p><div class="bbgc-rows">' + brandHtml + '</div>' + otherBrand + '</fieldset><div class="bbgc-field"><label class="bbgc-label" for="retailer">Where are you planning to purchase?</label>' + select('retailer', ['Amazon.ca', 'Walmart', 'Best Buy', 'Baby specialty store', 'Pharmacy / medical supply store', 'Directly from the manufacturer', 'Other retailer', 'I haven\'t decided yet', 'I already purchased a breast pump'], 'Select a retailer') + '</div>' + otherRetailer + '<div class="bbgc-field"><label class="bbgc-label" for="timing">When are you planning to buy?</label>' + select('timing', ['Within 30 days', 'Within 1-3 months', 'More than 3 months from now', 'I already purchased one', 'I haven\'t decided'], 'Select a time frame') + '</div>';
+        return '<fieldset class="bbgc-field"><legend class="bbgc-label">Which breast pump brands are you considering?</legend><p class="bbgc-micro">Select all that apply. No model selection needed.</p><div class="bbgc-rows">' + brandHtml + '</div>' + otherBrand + '</fieldset><div class="bbgc-field"><label class="bbgc-label" for="retailer">Where are you planning to purchase?</label>' + select('retailer', ['Snuggle Bugz', 'West Coast Kids', 'Walmart', 'Amazon.ca', 'Well.ca', 'Shoppers Drug Mart', 'Rexall', 'Clément', 'London Drugs', 'Best Buy', 'Other'], 'Select a retailer') + '</div>' + otherRetailer + '<div class="bbgc-field"><label class="bbgc-label" for="timing">When are you planning to buy?</label>' + select('timing', ['Within 30 days', 'Within 1-3 months', 'More than 3 months from now', 'I already purchased one', 'I haven\'t decided'], 'Select a time frame') + '</div>';
     }
 
     function results() {
@@ -273,6 +327,11 @@
         html += '<h1 class="bbgc-form-title">What did you find?</h1><p class="bbgc-form-intro">Tell us what your insurer showed. It\'s okay if you couldn\'t find an answer.</p>';
         html += '<div class="bbgc-error" id="bbgc-form-error" role="alert"></div>';
         html += '<fieldset class="bbgc-field bbgc-coverage"><legend class="bbgc-label">Does your plan cover breast pumps?</legend>' + choices('coverage', [['yes', 'Yes'], ['no', 'No'], ['unclear', 'Couldn\'t confirm']]) + '</fieldset>';
+        if (state.coverage === 'yes') {
+            html += prescriptionField();
+            html += categoryField();
+        }
+        html += emailField();
         if (state.coverage === 'yes') {
             html += coverageFields();
         } else if (state.coverage === 'no') {
@@ -302,9 +361,10 @@
             no: 'No - reported by you',
             unclear: 'Not confirmed'
         }[state.coverage] || 'Not provided';
-        var html = '<main class="bbgc-page bbgc-success bbgc-view"><div class="bbgc-success-icon">' + icon('check') + '</div><div class="bbgc-kicker" style="justify-content:center">GUIDE COMPLETE</div><h1>Thank you for helping other parents.</h1><p class="bbgc-intro">Here\'s a summary of what you entered.</p>';
+        var html = '<main class="bbgc-page bbgc-success bbgc-view"><div class="bbgc-success-icon">' + icon('check') + '</div><div class="bbgc-kicker" style="justify-content:center">GUIDE COMPLETE</div><h1>Thank you</h1><p class="bbgc-intro">Thank you for helping other parents. Here\'s a summary of what you entered.</p>';
         html += '<div class="bbgc-summary"><div class="bbgc-summary-title">Your reported results</div>';
         html += '<div class="bbgc-summary-row"><small>Insurance company</small><strong>' + esc(insurerName()) + '</strong></div>';
+        html += '<div class="bbgc-summary-row"><small>Email</small><strong>' + esc(state.email) + '</strong></div>';
         html += '<div class="bbgc-summary-row"><small>Breast pump coverage</small><strong>' + esc(coverageLabel) + '</strong></div>';
         html += '<div class="bbgc-summary-row is-amount"><small>' + esc(title) + '</small><strong>' + esc(money) + '</strong><small>CAD · Not a payment guarantee</small></div>';
         if (state.percent && state.coverage === 'yes') {
@@ -416,6 +476,7 @@
             state.responseId = response.id;
             state.responseVersion = response.rowVersion;
             state.coverage = response.coverage || '';
+            state.email = response.email || '';
             state.amount = response.amount || '';
             state.noAmount = !!response.noAmount;
             state.percent = response.percent || '';
@@ -527,6 +588,7 @@
     function responseBody() {
         return {
             coverage: state.coverage,
+            email: String(state.email || '').trim(),
             amount: state.noAmount ? '' : state.amount,
             noAmount: !!state.noAmount,
             percent: state.percent,
@@ -630,6 +692,15 @@
         el.scrollIntoView({ block: 'center' });
     }
 
+    function clearError() {
+        var el = document.getElementById('bbgc-form-error');
+        if (!el) {
+            return;
+        }
+        el.textContent = '';
+        el.classList.remove('is-shown');
+    }
+
     document.addEventListener('click', function (event) {
         var modal = event.target.closest('[data-modal]');
         if (modal && root.contains(modal)) {
@@ -687,6 +758,11 @@
                     showError('Please tell us whether you found coverage, or choose "Couldn\'t confirm".');
                     return;
                 }
+                state.email = String(state.email || '').trim();
+                if (!isValidEmail(state.email)) {
+                    showError('Enter the email address from your BabyBrands registration.');
+                    return;
+                }
                 if (state.coverage === 'yes' && !state.noAmount) {
                     var value = String(state.amount).replace(/,/g, '').trim();
                     if (!/^\d+(\.\d{1,2})?$/.test(value) || !isFinite(Number(value)) || Number(value) < 0 || Number(value) > 1000000) {
@@ -695,9 +771,14 @@
                     }
                     state.amount = value;
                 }
-                if (state.coverage === 'yes' && state.percent && (!/^\d+(\.\d{1,2})?$/.test(state.percent) || Number(state.percent) > 100 || Number(state.percent) < 0)) {
-                    showError('Enter a percentage between 0 and 100, or leave it blank.');
-                    return;
+                if (state.coverage === 'yes' && state.percent) {
+                    state.percent = normalizePercent(state.percent);
+                    if (!isValidPercent(state.percent)) {
+                        showError(Number(state.percent) > 100
+                            ? 'Reimbursement percentage cannot be more than 100.'
+                            : 'Enter a percentage from 0 to 100, or leave it blank.');
+                        return;
+                    }
                 }
                 if (state.coverage === 'yes' && state.category === 'Other - please specify' && !String(state.otherCategory).trim()) {
                     showError('Enter the other section name, or leave the optional section question blank.');
@@ -737,21 +818,63 @@
         if (event.target.type === 'radio' || event.target.type === 'checkbox' || event.target.tagName === 'SELECT') {
             return;
         }
-        if (name === 'amount' || name === 'percent') {
-            var cleaned = String(event.target.value).replace(/[^\d.]/g, '');
-            var parts = cleaned.split('.');
-            if (parts.length > 1) {
-                cleaned = parts[0] + '.' + parts.slice(1).join('').slice(0, 2);
+        if (name === 'email') {
+            state.email = event.target.value;
+            if (isValidEmail(state.email)) {
+                clearError();
             }
-            if (event.target.value !== cleaned) {
-                event.target.value = cleaned;
+            save();
+            return;
+        }
+        if (name === 'amount') {
+            var amountCleaned = String(event.target.value).replace(/[^\d.]/g, '');
+            var amountParts = amountCleaned.split('.');
+            if (amountParts.length > 1) {
+                amountCleaned = amountParts[0] + '.' + amountParts.slice(1).join('').slice(0, 2);
             }
-            state[name] = cleaned;
+            if (event.target.value !== amountCleaned) {
+                event.target.value = amountCleaned;
+            }
+            state.amount = amountCleaned;
+            save();
+            return;
+        }
+        if (name === 'percent') {
+            var typing = sanitizePercentTyping(event.target.value);
+            if (event.target.value !== typing) {
+                event.target.value = typing;
+            }
+            state.percent = typing === '' || typing === '.' ? '' : normalizePercent(typing.replace(/\.$/, ''));
+            if (isValidPercent(state.percent)) {
+                clearError();
+            }
             save();
             return;
         }
         state[name] = event.target.value;
         save();
+    });
+
+    document.addEventListener('focusin', function (event) {
+        if (!root.contains(event.target) || event.target.name !== 'percent') {
+            return;
+        }
+        // Edit the bare number; % is added again when the field is complete.
+        event.target.value = state.percent || '';
+    });
+
+    document.addEventListener('focusout', function (event) {
+        if (!root.contains(event.target) || event.target.name !== 'percent') {
+            return;
+        }
+        state.percent = normalizePercent(event.target.value);
+        event.target.value = state.percent === '' ? '' : state.percent + '%';
+        save();
+        if (state.percent !== '' && Number(state.percent) > 100) {
+            showError('Reimbursement percentage cannot be more than 100.');
+        } else {
+            clearError();
+        }
     });
 
     document.addEventListener('change', function (event) {
@@ -806,11 +929,8 @@
             if (name === 'category' && state.category !== 'Other - please specify') {
                 state.otherCategory = '';
             }
-            if (name === 'retailer' && state.retailer !== 'Other retailer') {
+            if (name === 'retailer' && state.retailer !== 'Other') {
                 state.otherRetailer = '';
-            }
-            if (state.retailer === 'I already purchased a breast pump') {
-                state.timing = 'I already purchased one';
             }
         }
         save();
@@ -818,9 +938,6 @@
             syncJourney();
         }
         var refresh = ['insurer', 'coverage', 'noAmount', 'category', 'account', 'brands', 'retailer'];
-        if (name === 'timing' && state.retailer === 'I already purchased a breast pump') {
-            refresh.push('timing');
-        }
         if (refresh.indexOf(name) !== -1) {
             render();
             window.scrollTo(0, scrollY);
@@ -859,7 +976,11 @@
         if (!link || !root.contains(link)) {
             return;
         }
-        track(link.getAttribute('data-event') || 'help_clicked', state.view === 'page2' ? 2 : 3);
+        var eventName = link.getAttribute('data-event') || 'help_clicked';
+        track(eventName, state.view === 'page2' ? 2 : 3);
+        if (eventName === 'insurer_website_clicked' && state.view === 'page2') {
+            go('results');
+        }
     });
 
     render();

@@ -419,7 +419,16 @@ function bbgc_admin_responses()
     $total = (int) $wpdb->get_var("SELECT COUNT(*) FROM " . bbgc_table('responses') . " r LEFT JOIN " . bbgc_table('journeys') . " j ON j.id = r.journey_id LEFT JOIN " . bbgc_table('insurers') . " i ON i.id = r.insurer_id WHERE {$where}");
     $limit = (int) $perPage;
     $start = (int) $offset;
-    $rows = $wpdb->get_results("SELECT r.*, i.name AS insurer_name, j.public_id, j.source FROM " . bbgc_table('responses') . " r LEFT JOIN " . bbgc_table('journeys') . " j ON j.id = r.journey_id LEFT JOIN " . bbgc_table('insurers') . " i ON i.id = r.insurer_id WHERE {$where} ORDER BY r.submitted_at DESC LIMIT {$limit} OFFSET {$start}");
+    $rows = $wpdb->get_results("SELECT r.*, i.name AS insurer_name, j.public_id, j.source, j.campaign_code FROM " . bbgc_table('responses') . " r LEFT JOIN " . bbgc_table('journeys') . " j ON j.id = r.journey_id LEFT JOIN " . bbgc_table('insurers') . " i ON i.id = r.insurer_id WHERE {$where} ORDER BY r.submitted_at DESC LIMIT {$limit} OFFSET {$start}");
+    $brandsByResponse = [];
+    if ($rows) {
+        $ids = array_map('intval', wp_list_pluck($rows, 'id'));
+        $idList = implode(',', $ids);
+        $brandRows = $wpdb->get_results("SELECT response_id, brand_code FROM " . bbgc_table('response_brands') . " WHERE response_id IN ({$idList})");
+        foreach ($brandRows as $brandRow) {
+            $brandsByResponse[(int) $brandRow->response_id][] = bbgc_brand_label((string) $brandRow->brand_code);
+        }
+    }
     echo '<div class="wrap"><h1>Responses</h1><p>These are self-reported answers. They are not verified benefits.</p>';
     bbgc_admin_filter_form($filters);
     if (current_user_can('bbgc_export_responses')) {
@@ -432,15 +441,45 @@ function bbgc_admin_responses()
         submit_button('Export CSV for this filter', 'secondary', '', false);
         echo '</form>';
     }
-    echo '<table class="widefat striped"><thead><tr><th>Submitted</th><th>Insurer</th><th>Coverage</th><th>Amount</th><th>Meaning</th><th>Category</th><th></th></tr></thead><tbody>';
+    echo '<style>.bbgc-responses-scroll{width:100%;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid #c3c4c7;background:#fff}.bbgc-responses-table{width:max-content;min-width:100%;margin:0;border:0;box-shadow:none}.bbgc-responses-table th,.bbgc-responses-table td{white-space:nowrap;padding:8px 10px;vertical-align:top}.bbgc-responses-table td.bbgc-wrap{white-space:normal;max-width:200px;word-break:break-word}</style>';
+    echo '<div class="bbgc-responses-scroll"><table class="widefat striped bbgc-responses-table"><thead><tr>';
+    $headers = ['Submitted', 'Insurer', 'Email', 'Coverage', 'Amount', 'Percent', 'Meaning', 'Prescription', 'Category', 'Source', 'Campaign', 'Retailer', 'Timing', 'Brands', 'Ease', ''];
+    foreach ($headers as $header) {
+        echo '<th>' . esc_html($header) . '</th>';
+    }
+    echo '</tr></thead><tbody>';
     if (!$rows) {
-        echo '<tr><td colspan="7">No responses in this filter.</td></tr>';
+        echo '<tr><td colspan="' . count($headers) . '">No responses in this filter.</td></tr>';
     }
     foreach ($rows as $row) {
         $amount = $row->amount_not_found ? 'Not found' : ($row->amount_cad === null ? 'Blank' : $row->amount_cad);
-        echo '<tr><td>' . esc_html(get_date_from_gmt($row->submitted_at, 'Y-m-d H:i')) . '</td><td>' . esc_html((string) $row->insurer_name) . '</td><td>' . esc_html($row->coverage_status) . '</td><td>' . esc_html((string) $amount) . '</td><td>' . esc_html($row->amount_meaning) . '</td><td>' . esc_html($row->category_other ? $row->category_other : $row->category_label_snapshot) . '</td><td><a href="' . esc_url(admin_url('admin.php?page=bbgc-responses&response=' . $row->id)) . '">View</a></td></tr>';
+        $email = isset($row->email) ? (string) $row->email : '';
+        $category = $row->category_other ? $row->category_other : $row->category_label_snapshot;
+        $brands = isset($brandsByResponse[(int) $row->id]) ? implode(', ', $brandsByResponse[(int) $row->id]) : '';
+        $retailer = bbgc_retailer_label((string) $row->retailer_code);
+        if ($row->retailer_code === 'other_retailer' && $row->retailer_other) {
+            $retailer = $row->retailer_other;
+        }
+        echo '<tr>';
+        echo '<td>' . esc_html(get_date_from_gmt($row->submitted_at, 'Y-m-d H:i')) . '</td>';
+        echo '<td>' . esc_html((string) $row->insurer_name) . '</td>';
+        echo '<td class="bbgc-wrap">' . esc_html($email) . '</td>';
+        echo '<td>' . esc_html($row->coverage_status) . '</td>';
+        echo '<td>' . esc_html((string) $amount) . '</td>';
+        echo '<td>' . esc_html($row->reimbursement_percent === null ? '' : (string) $row->reimbursement_percent) . '</td>';
+        echo '<td>' . esc_html((string) $row->amount_meaning) . '</td>';
+        echo '<td>' . esc_html((string) $row->prescription_required) . '</td>';
+        echo '<td class="bbgc-wrap">' . esc_html((string) $category) . '</td>';
+        echo '<td>' . esc_html((string) $row->source) . '</td>';
+        echo '<td>' . esc_html((string) $row->campaign_code) . '</td>';
+        echo '<td>' . esc_html($retailer) . '</td>';
+        echo '<td>' . esc_html(bbgc_timing_label((string) $row->purchase_timing)) . '</td>';
+        echo '<td class="bbgc-wrap">' . esc_html($brands) . '</td>';
+        echo '<td>' . esc_html((string) $row->feedback_ease) . '</td>';
+        echo '<td><a href="' . esc_url(admin_url('admin.php?page=bbgc-responses&response=' . $row->id)) . '">View</a></td>';
+        echo '</tr>';
     }
-    echo '</tbody></table>';
+    echo '</tbody></table></div>';
     $pages = (int) ceil($total / $perPage);
     if ($pages > 1) {
         echo '<p>';
@@ -466,13 +505,15 @@ function bbgc_admin_response_detail($id)
     }
     $brands = $wpdb->get_col($wpdb->prepare('SELECT brand_code FROM ' . bbgc_table('response_brands') . ' WHERE response_id = %d', $row->id));
     echo '<div class="wrap"><h1>Response ' . esc_html((string) $row->id) . '</h1>';
-    echo '<table class="widefat striped" style="max-width:760px"><tbody>';
+    echo '<style>.bbgc-response-detail{width:auto;max-width:520px}.bbgc-response-detail th{width:1%;white-space:nowrap;padding:8px 10px;vertical-align:top}.bbgc-response-detail td{padding:8px 10px;word-break:break-word}</style>';
+    echo '<table class="widefat striped bbgc-response-detail"><tbody>';
     $pairs = [
         'Journey reference' => $row->public_id,
         'Insurer' => $row->insurer_name,
         'Source' => $row->source,
         'Campaign' => $row->campaign_code,
         'Coverage' => $row->coverage_status,
+        'Email' => isset($row->email) ? $row->email : '',
         'Amount CAD' => $row->amount_not_found ? 'Could not find a dollar amount' : $row->amount_cad,
         'Meaning' => $row->amount_meaning,
         'Percent' => $row->reimbursement_percent,
@@ -537,7 +578,7 @@ function bbgc_export_responses()
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename=bbgc-responses.csv');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['submitted_at', 'journey', 'insurer', 'source', 'campaign', 'coverage', 'amount_cad', 'amount_not_found', 'amount_meaning', 'percent', 'prescription', 'category', 'category_other', 'ease', 'comment', 'retailer', 'timing', 'directory_version']);
+    fputcsv($out, ['submitted_at', 'journey', 'insurer', 'source', 'campaign', 'coverage', 'email', 'amount_cad', 'amount_not_found', 'amount_meaning', 'percent', 'prescription', 'category', 'category_other', 'ease', 'comment', 'retailer', 'timing', 'directory_version']);
     foreach ($rows as $row) {
         fputcsv($out, array_map('bbgc_csv_cell', [
             $row->submitted_at,
@@ -546,6 +587,7 @@ function bbgc_export_responses()
             $row->source,
             $row->campaign_code,
             $row->coverage_status,
+            isset($row->email) ? $row->email : '',
             $row->amount_cad,
             $row->amount_not_found ? '1' : '0',
             $row->amount_meaning,

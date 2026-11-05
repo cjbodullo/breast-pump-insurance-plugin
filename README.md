@@ -85,16 +85,17 @@ Draft answers stay in the browser under the `sessionStorage` key `bbgc_guide_v1`
 
 A successful finish writes one response for the visit. **Edit my answers** updates that same response and does not count as a second completion. Changing the insurance company after a finished visit starts a new visit. Dollar amounts are stored as CAD decimals. Answers are self-reported and are not verified benefits.
 
-The visitor session is an HttpOnly cookie (`bbgc_session`). The browser sends a separate CSRF token with each save. The collection notice shown before finish is version `2026-10-19`.
+The visitor session is an HttpOnly cookie (`bbgc_session`). The browser sends a separate CSRF token with each save. The collection notice shown before finish is version `2026-11-05`.
 
 Validation on **Finish & See My Summary**:
 
 - Coverage is required.
+- Email is required (used to link the guide answers to the BabyBrands registration).
 - A "Yes" answer needs a CAD amount from 0 to 1,000,000 with up to two decimals, or the "couldn't find a dollar amount" choice. Zero is allowed.
 - Percent, if filled in, must be from 0 to 100.
 - "Other" section text is required only when that section option is selected.
 - "I haven't decided yet" is exclusive among brand choices.
-- If the retailer is "I already purchased a breast pump", timing is set to "I already purchased one".
+- Retailer choices are: Snuggle Bugz, West Coast Kids, Walmart, Amazon.ca, Well.ca, Shoppers Drug Mart, Rexall, Clément, London Drugs, Best Buy, Other.
 
 ## Insurers
 

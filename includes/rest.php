@@ -214,13 +214,21 @@ function bbgc_brand_label($code)
 function bbgc_retailer_label($code)
 {
     $map = [
-        'amazon_ca' => 'Amazon.ca',
+        'snuggle_bugz' => 'Snuggle Bugz',
+        'west_coast_kids' => 'West Coast Kids',
         'walmart' => 'Walmart',
+        'amazon_ca' => 'Amazon.ca',
+        'well_ca' => 'Well.ca',
+        'shoppers_drug_mart' => 'Shoppers Drug Mart',
+        'rexall' => 'Rexall',
+        'clement' => 'Clément',
+        'london_drugs' => 'London Drugs',
         'best_buy' => 'Best Buy',
+        'other_retailer' => 'Other',
+        // Legacy codes kept for older saved responses.
         'baby_specialty' => 'Baby specialty store',
         'pharmacy_medical' => 'Pharmacy / medical supply store',
         'manufacturer' => 'Directly from the manufacturer',
-        'other_retailer' => 'Other retailer',
         'undecided' => 'I haven\'t decided yet',
         'already_purchased' => 'I already purchased a breast pump',
     ];
@@ -254,6 +262,7 @@ function bbgc_response_payload($response, $brands)
         'id' => (int) $response->id,
         'rowVersion' => (int) $response->row_version,
         'coverage' => $response->coverage_status,
+        'email' => isset($response->email) ? (string) $response->email : '',
         'amount' => $response->amount_cad === null ? '' : (string) $response->amount_cad,
         'noAmount' => (bool) $response->amount_not_found,
         'percent' => $response->reimbursement_percent === null ? '' : (string) $response->reimbursement_percent,
@@ -571,6 +580,10 @@ function bbgc_validate_response($journey, $params, $isUpdate)
     if (!in_array($coverage, ['yes', 'no', 'unclear'], true)) {
         return new WP_Error('coverage', 'Tell us whether you found coverage, or choose Couldn\'t confirm.');
     }
+    $email = isset($params['email']) ? sanitize_email(wp_unslash((string) $params['email'])) : '';
+    if ($email === '' || !is_email($email)) {
+        return new WP_Error('email', 'Enter the email address from your BabyBrands registration.');
+    }
     $noAmount = !empty($params['noAmount']);
     $amount = isset($params['amount']) ? trim((string) $params['amount']) : '';
     $percent = isset($params['percent']) ? trim((string) $params['percent']) : '';
@@ -600,8 +613,14 @@ function bbgc_validate_response($journey, $params, $isUpdate)
             return new WP_Error('amount', 'Enter a valid dollar amount, or select "I couldn\'t find a dollar amount".');
         }
     }
-    if ($percent !== '' && (!preg_match('/^\d+(\.\d{1,2})?$/', $percent) || (float) $percent > 100)) {
-        return new WP_Error('percent', 'Enter a percentage between 0 and 100, or leave it blank.');
+    if ($percent !== '') {
+        $percent = preg_replace('/[^\d.]/', '', (string) $percent);
+        if (!preg_match('/^\d{1,3}(\.\d{1,2})?$/', $percent) || (float) $percent < 0) {
+            return new WP_Error('percent', 'Enter a percentage from 0 to 100, or leave it blank.');
+        }
+        if ((float) $percent > 100) {
+            return new WP_Error('percent', 'Reimbursement percentage cannot be more than 100.');
+        }
     }
     $meanings = ['', 'remaining', 'reimbursement_limit', 'eligible_expense_limit', 'shared_balance', 'unknown'];
     if (!in_array($meaning, $meanings, true)) {
@@ -665,15 +684,17 @@ function bbgc_validate_response($journey, $params, $isUpdate)
     }
 
     $retailerMap = [
-        'Amazon.ca' => 'amazon_ca',
+        'Snuggle Bugz' => 'snuggle_bugz',
+        'West Coast Kids' => 'west_coast_kids',
         'Walmart' => 'walmart',
+        'Amazon.ca' => 'amazon_ca',
+        'Well.ca' => 'well_ca',
+        'Shoppers Drug Mart' => 'shoppers_drug_mart',
+        'Rexall' => 'rexall',
+        'Clément' => 'clement',
+        'London Drugs' => 'london_drugs',
         'Best Buy' => 'best_buy',
-        'Baby specialty store' => 'baby_specialty',
-        'Pharmacy / medical supply store' => 'pharmacy_medical',
-        'Directly from the manufacturer' => 'manufacturer',
-        'Other retailer' => 'other_retailer',
-        'I haven\'t decided yet' => 'undecided',
-        'I already purchased a breast pump' => 'already_purchased',
+        'Other' => 'other_retailer',
     ];
     $timingMap = [
         'Within 30 days' => 'within_30_days',
@@ -712,6 +733,7 @@ function bbgc_validate_response($journey, $params, $isUpdate)
 
     return [
         'coverage_status' => $coverage,
+        'email' => $email,
         'amount_cad' => $amount === '' ? null : $amount,
         'amount_not_found' => $noAmount ? 1 : 0,
         'reimbursement_percent' => $percent === '' ? null : $percent,

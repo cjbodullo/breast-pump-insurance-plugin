@@ -147,7 +147,7 @@ function bbgc_render_shortcode($atts)
         'noticeVersion' => BBGC_NOTICE_VERSION,
         'notice' => __('When you finish, BabyBrands Gift Club will store your answers to improve this guide. Your answers are self-reported, not verified by BabyBrands Gift Club.', 'breast-pump-insurance-plugin'),
         'insurers' => bbgc_public_directory(),
-        'privacy' => __('This guide asks only for the answers you choose to enter. Insurance logins, member numbers, prescriptions and medical documents are not collected here. Browsing the guide is not a signup for marketing.', 'breast-pump-insurance-plugin'),
+        'privacy' => __('This guide asks for the answers you choose to enter, including your email so BabyBrands Gift Club can link them to your registration. Insurance logins, member numbers, prescriptions and medical documents are not collected here. Browsing the guide is not a signup for marketing.', 'breast-pump-insurance-plugin'),
         'about' => __('BabyBrands Gift Club  helps you navigate your insurer\'s website. It does not verify benefits or submit claims. Section names vary by plan; check eligibility and conditions with your insurer.', 'breast-pump-insurance-plugin'),
         'decline' => __('You can leave this optional guide and continue. Your registration is unchanged, and no insurance answers are required.', 'breast-pump-insurance-plugin'),
     ]);
