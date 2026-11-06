@@ -174,28 +174,6 @@
         return '<main class="bbgc-page bbgc-view">' + step(1, 'YOUR INSURER') + '<div class="bbgc-hero"><h1>Your Insurance Could Help Pay for Your Breast Pump!</h1><p class="bbgc-intro">Find out if your plan covers a breast pump and how much you may be eligible to receive.</p></div><div class="bbgc-field"><label class="bbgc-label" for="insurer">Which insurance company do you have?</label>' + select('insurer', options, 'Select your insurance company') + '</div>' + other + btn('Check My Breast Pump Coverage', 'guide', 'bbgc-btn-primary', state.insurer ? '' : 'disabled') + '<p class="bbgc-micro is-center bbgc-sp18">Free to use · No obligation to purchase</p></main>';
     }
 
-    function accountHelp() {
-        var current = insurer();
-        var html = '<p class="bbgc-label">Have you already created an online account with your insurance company?</p>' + choices('account', [
-            ['yes', 'Yes, I have an account and have logged in before.'],
-            ['no', 'No, I need to create an account.'],
-            ['unsure', 'I\'m not sure / I need help accessing my account.']
-        ], true);
-        if (state.account === 'yes') {
-            html += '<p class="bbgc-sp12">' + esc(current.existing_help || current.login) + '</p>';
-        }
-        if (state.account === 'no') {
-            html += '<p class="bbgc-sp12">' + esc(current.new_help || current.login) + '</p>';
-            if (current.register) {
-                html += '<div class="bbgc-help-links">' + ext('Registration help', current.register, 'bbgc-minor', 'registration_help_clicked') + '</div>';
-            }
-        }
-        if (state.account === 'unsure') {
-            html += '<p class="bbgc-sp12">' + esc(current.recovery_help || 'On your insurer\'s sign-in page, use the account-recovery options. Do not create a second account if you already have one.') + '</p>';
-        }
-        return html;
-    }
-
     function page2() {
         var current = insurer();
         var known = !!current.url;
@@ -213,7 +191,6 @@
         if (known) {
             html += ext('Go to ' + esc(name) + ' Website', current.url, 'bbgc-btn bbgc-btn-dark bbgc-website', 'insurer_website_clicked');
             html += '<p class="bbgc-newtab">Opens in a new tab and continues to your results here so you can report what you find.</p>';
-            html += details('account', 'Need help signing in?', accountHelp());
             html += '<h2 class="bbgc-guide-title">' + esc(current.areas_heading || 'Places to check in your plan') + '</h2>';
             html += '<p class="bbgc-micro">' + esc(current.areas_note || '') + '</p>';
             if (current.show_route) {
@@ -222,12 +199,8 @@
             html += '<div class="bbgc-area-list">' + (current.areas || []).map(function (area, index) {
                 return '<section class="bbgc-area"><span class="bbgc-num">' + (index + 1) + '</span><div><h3>' + esc(area[0]) + '</h3><p>' + esc(area[1]) + '</p></div></section>';
             }).join('') + '</div>';
-            html += '<p class="bbgc-note">A general equipment or spending-account balance is not a breast pump allowance. Confirm that breast pumps qualify under your plan.</p>';
             if (current.fallback && current.fallback !== current.url) {
                 html += '<div class="bbgc-minor-center">' + ext('Official member page', current.fallback, 'bbgc-minor', 'help_link_clicked') + '</div>';
-            }
-            if (current.help) {
-                html += '<div class="bbgc-minor-center">' + ext('View ' + esc(name) + '\'s official guide', current.help, 'bbgc-minor', 'help_clicked') + '</div>';
             }
         } else {
             html += '<div class="bbgc-status">Use only the official website shown on your insurance card or plan documents.</div>';
@@ -304,7 +277,7 @@
     }
 
     function feedback() {
-        return '<fieldset class="bbgc-field"><legend class="bbgc-label">How easy was it to find your coverage?</legend>' + choices('ease', [['very_easy', 'Very easy'], ['somewhat_easy', 'Somewhat easy'], ['difficult', 'Difficult'], ['not_found', 'I couldn\'t find it']], true) + '</fieldset><div class="bbgc-field"><label class="bbgc-label" for="comment">Any suggestions? <span class="bbgc-optional">(optional)</span></label><textarea id="comment" name="comment" maxlength="500" placeholder="Tell us what would make this easier...">' + esc(state.comment) + '</textarea><small class="bbgc-help">Please don\'t include policy numbers or medical details.</small></div>';
+        return '<fieldset class="bbgc-field"><legend class="bbgc-label">How easy was it to find your coverage?</legend>' + choices('ease', [['very_easy', 'Very easy'], ['somewhat_easy', 'Somewhat easy'], ['difficult', 'Difficult'], ['not_found', 'I couldn\'t find it']], true) + '</fieldset>';
     }
 
     function shopping() {
@@ -339,7 +312,6 @@
         } else if (state.coverage === 'unclear') {
             html += '<div class="bbgc-status">Please don\'t enter a guess. Your insurer or plan administrator can confirm eligibility and any amount.</div>';
         }
-        html += '<p class="bbgc-optional-heading">A little extra help · optional</p>';
         html += details('feedback', 'Help us improve this guide', feedback());
         html += details('shopping', 'Your breast pump shopping plans', shopping());
         html += '<div class="bbgc-submit">' + btn('Finish & See My Summary', 'finish');
@@ -361,7 +333,7 @@
             no: 'No - reported by you',
             unclear: 'Not confirmed'
         }[state.coverage] || 'Not provided';
-        var html = '<main class="bbgc-page bbgc-success bbgc-view"><div class="bbgc-success-icon">' + icon('check') + '</div><div class="bbgc-kicker" style="justify-content:center">GUIDE COMPLETE</div><h1>Thank you</h1><p class="bbgc-intro">Thank you for helping other parents. Here\'s a summary of what you entered.</p>';
+        var html = '<main class="bbgc-page bbgc-success bbgc-view"><div class="bbgc-success-icon">' + icon('check') + '</div><div class="bbgc-kicker" style="justify-content:center">GUIDE COMPLETE</div><h1>Thank you</h1>';
         html += '<div class="bbgc-summary"><div class="bbgc-summary-title">Your reported results</div>';
         html += '<div class="bbgc-summary-row"><small>Insurance company</small><strong>' + esc(insurerName()) + '</strong></div>';
         html += '<div class="bbgc-summary-row"><small>Email</small><strong>' + esc(state.email) + '</strong></div>';
