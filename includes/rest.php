@@ -609,16 +609,26 @@ function bbgc_validate_response($journey, $params, $isUpdate)
         $amount = '';
     }
     if ($coverage === 'yes' && !$noAmount) {
-        if (!preg_match('/^\d+(\.\d{1,2})?$/', $amount) || (float) $amount > 1000000) {
+        $amount = preg_replace('/[^\d]/', '', (string) $amount);
+        if ($amount !== '') {
+            $amount = substr($amount, 0, 3);
+        }
+        if (!preg_match('/^\d{1,3}$/', $amount) || (int) $amount > 999) {
             return new WP_Error('amount', 'Enter a valid dollar amount, or select "I couldn\'t find a dollar amount".');
         }
     }
     if ($percent !== '') {
-        $percent = preg_replace('/[^\d.]/', '', (string) $percent);
-        if (!preg_match('/^\d{1,3}(\.\d{1,2})?$/', $percent) || (float) $percent < 0) {
-            return new WP_Error('percent', 'Enter a percentage from 0 to 100, or leave it blank.');
+        $percent = preg_replace('/[^\d]/', '', (string) $percent);
+        if ($percent !== '') {
+            $percent = ltrim($percent, '0');
+            if ($percent === '') {
+                $percent = '0';
+            }
         }
-        if ((float) $percent > 100) {
+        if (!preg_match('/^\d{1,3}$/', $percent) || (int) $percent < 0) {
+            return new WP_Error('percent', 'Enter a whole number from 0 to 100, or leave it blank.');
+        }
+        if ((int) $percent > 100) {
             return new WP_Error('percent', 'Reimbursement percentage cannot be more than 100.');
         }
     }

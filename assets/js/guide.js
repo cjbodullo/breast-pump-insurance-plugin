@@ -222,42 +222,30 @@
 
     function amountPanel() {
         var percentDisplay = state.percent === '' ? '' : esc(state.percent) + '%';
-        return '<div class="bbgc-money"><label class="bbgc-label" for="amount">How much is available toward your breast pump?</label><p class="bbgc-micro">Enter the dollar amount your insurer showed specifically for a breast pump.</p><div class="bbgc-money-input"><span class="bbgc-currency">$</span><input type="text" inputmode="decimal" id="amount" name="amount" value="' + esc(state.amount) + '" placeholder="e.g. 300" autocomplete="off" ' + (state.noAmount ? 'disabled' : '') + '><span class="bbgc-cad">CAD</span></div><label class="bbgc-check"><input type="checkbox" name="noAmount" ' + (state.noAmount ? 'checked' : '') + '>I couldn\'t find a dollar amount</label>' + details('percent', 'Percentage or other benefit details <span class="bbgc-optional">(optional)</span>', '<div class="bbgc-field"><label class="bbgc-label" for="percent">Reimbursement percentage</label><div class="bbgc-percent-input"><input type="text" inputmode="decimal" name="percent" id="percent" value="' + percentDisplay + '" placeholder="e.g. 80%" maxlength="6" autocomplete="off" aria-describedby="bbgc-percent-help"></div><small class="bbgc-help" id="bbgc-percent-help">Enter a value from 0 to 100. Leave blank if your plan does not show one.</small></div><div class="bbgc-field"><label class="bbgc-label" for="amountMeaning">What does the dollar figure describe?</label>' + select('amountMeaning', [['remaining', 'Remaining breast-pump allowance'], ['reimbursement_limit', 'Maximum insurer reimbursement'], ['eligible_expense_limit', 'Maximum eligible purchase expense'], ['shared_balance', 'General equipment / spending-account balance'], ['unknown', 'I\'m not sure']], 'Select if you know') + '</div>') + '</div>';
+        return '<div class="bbgc-money"><label class="bbgc-label" for="amount">How much is available toward your breast pump?</label><p class="bbgc-micro">Enter the dollar amount your insurer showed specially for a breast pump.</p><div class="bbgc-money-input"><span class="bbgc-currency">$</span><input type="text" inputmode="numeric" id="amount" name="amount" value="' + esc(state.amount) + '" placeholder="e.g. 300" maxlength="3" autocomplete="off" ' + (state.noAmount ? 'disabled' : '') + '><span class="bbgc-cad">CAD</span></div><label class="bbgc-check"><input type="checkbox" name="noAmount" ' + (state.noAmount ? 'checked' : '') + '>I couldn\'t find a dollar amount</label>' + details('percent', 'Percentage or other benefit details <span class="bbgc-optional">(optional)</span>', '<div class="bbgc-field"><label class="bbgc-label" for="percent">Reimbursement percentage</label><div class="bbgc-percent-input"><input type="text" inputmode="numeric" name="percent" id="percent" value="' + percentDisplay + '" placeholder="e.g. 80%" maxlength="4" autocomplete="off" aria-describedby="bbgc-percent-help"></div><small class="bbgc-help" id="bbgc-percent-help">Enter a whole number from 0 to 100 (up to 3 digits). Leave blank if your plan does not show one.</small></div><div class="bbgc-field"><label class="bbgc-label" for="amountMeaning">What does the dollar figure describe?</label>' + select('amountMeaning', [['remaining', 'Remaining breast-pump allowance'], ['reimbursement_limit', 'Maximum insurer reimbursement'], ['eligible_expense_limit', 'Maximum eligible purchase expense'], ['shared_balance', 'General equipment / spending-account balance'], ['unknown', 'I\'m not sure']], 'Select if you know') + '</div>') + '</div>';
+    }
+
+    function normalizeAmount(raw) {
+        return String(raw || '').replace(/[^\d]/g, '').slice(0, 3);
+    }
+
+    function isValidAmount(value) {
+        return /^\d{1,3}$/.test(value) && Number(value) >= 0 && Number(value) <= 999;
     }
 
     /**
-     * Keep digits/decimals only: max 3 digits before the decimal, 2 after.
+     * Whole number only, max 3 digits (0–100).
      */
     function normalizePercent(raw) {
-        var cleaned = String(raw || '').replace(/[^\d.]/g, '');
-        var parts = cleaned.split('.');
-        var whole = parts[0].slice(0, 3);
-        if (parts.length > 1) {
-            cleaned = whole + '.' + parts.slice(1).join('').slice(0, 2);
-        } else {
-            cleaned = whole;
-        }
-        if (cleaned === '' || cleaned === '.') {
-            return '';
-        }
-        return cleaned;
+        return String(raw || '').replace(/[^\d]/g, '').slice(0, 3);
     }
 
     function isValidPercent(value) {
-        return value === '' || (/^\d{1,3}(\.\d{1,2})?$/.test(value) && Number(value) >= 0 && Number(value) <= 100);
+        return value === '' || (/^\d{1,3}$/.test(value) && Number(value) >= 0 && Number(value) <= 100);
     }
 
-    /**
-     * Live typing helper: strip non-numeric chars, max 3 integer digits.
-     */
     function sanitizePercentTyping(raw) {
-        var typing = String(raw || '').replace(/[^\d.]/g, '');
-        var parts = typing.split('.');
-        var whole = parts[0].slice(0, 3);
-        if (parts.length > 1) {
-            return whole + '.' + parts.slice(1).join('').slice(0, 2);
-        }
-        return whole;
+        return normalizePercent(raw);
     }
 
     function prescriptionField() {
@@ -736,19 +724,18 @@
                     return;
                 }
                 if (state.coverage === 'yes' && !state.noAmount) {
-                    var value = String(state.amount).replace(/,/g, '').trim();
-                    if (!/^\d+(\.\d{1,2})?$/.test(value) || !isFinite(Number(value)) || Number(value) < 0 || Number(value) > 1000000) {
+                    state.amount = normalizeAmount(state.amount);
+                    if (!isValidAmount(state.amount)) {
                         showError('Enter a valid dollar amount, or select "I couldn\'t find a dollar amount".');
                         return;
                     }
-                    state.amount = value;
                 }
                 if (state.coverage === 'yes' && state.percent) {
                     state.percent = normalizePercent(state.percent);
                     if (!isValidPercent(state.percent)) {
                         showError(Number(state.percent) > 100
                             ? 'Reimbursement percentage cannot be more than 100.'
-                            : 'Enter a percentage from 0 to 100, or leave it blank.');
+                            : 'Enter a whole number from 0 to 100, or leave it blank.');
                         return;
                     }
                 }
@@ -799,11 +786,7 @@
             return;
         }
         if (name === 'amount') {
-            var amountCleaned = String(event.target.value).replace(/[^\d.]/g, '');
-            var amountParts = amountCleaned.split('.');
-            if (amountParts.length > 1) {
-                amountCleaned = amountParts[0] + '.' + amountParts.slice(1).join('').slice(0, 2);
-            }
+            var amountCleaned = normalizeAmount(event.target.value);
             if (event.target.value !== amountCleaned) {
                 event.target.value = amountCleaned;
             }
@@ -816,7 +799,7 @@
             if (event.target.value !== typing) {
                 event.target.value = typing;
             }
-            state.percent = typing === '' || typing === '.' ? '' : normalizePercent(typing.replace(/\.$/, ''));
+            state.percent = typing;
             if (isValidPercent(state.percent)) {
                 clearError();
             }
